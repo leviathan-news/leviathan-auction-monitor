@@ -32,12 +32,12 @@ async def bot_startup(startup_state: StateSnapshot) -> None:
     )
 
     # # TEST on_auction_created
-    # logs = list(auction_house().AuctionCreated.range(23970604, 23970606))
+    # logs = list(auction_house().AuctionCreated.range(24219892, 24219894))
     # for log in logs:
     #     await on_auction_created(log)
 
     # # TEST on_auction_bid
-    # logs = list(auction_house().AuctionBid.range(23988139, 23988141))
+    # logs = list(auction_house().AuctionBid.range(24147384, 24147386))
     # for log in logs:
     #     await on_auction_bid(log)
 
@@ -47,7 +47,7 @@ async def bot_startup(startup_state: StateSnapshot) -> None:
     #     await on_auction_extended(log)
 
     # # TEST on_auction_settled
-    # logs = list(auction_house().AuctionSettled.range(25134259, 25137180))
+    # logs = list(auction_house().AuctionSettled.range(24149742, 24149744))
     # for log in logs:
     #     await on_auction_settled(log)
 
@@ -112,6 +112,8 @@ async def on_auction_extended(event: ContractLog) -> None:
 @bot.on_(auction_house().AuctionSettled)
 async def on_auction_settled(event: ContractLog) -> None:
     print("AUCTION SETTLED")
+    print(event)
+    print(event.amount)
     await notify_group_chat(
         f"🏆 <b>Auction {event.auction_id}</b> has been settled. "
         f"The winner is <code>{ens_name(event.winner)}</code> with a bid of <b>{int(event.amount) / 1e18:.4f} WETH</b>."
@@ -131,16 +133,11 @@ async def notify_ending_soon(_: datetime) -> None:
 
     state = load_state()
     auction_end_times = state.get("auction_end_times", {})
-    print("AUCTION END TIMES")
-    print(auction_end_times)
     if not auction_end_times:
         return
 
     to_remove = []
     for auction_id, end_time in auction_end_times.items():
-        print("AUCTION END TIMES ITEMS")
-        print(auction_id, end_time)
-
         if 0 < (end_time - now_s) <= 2 * 60 * 60:  # 2 hours
             minutes_left = (end_time - now_s) // 60
             await notify_group_chat(f"⏰ <b>Auction {auction_id}</b> is ending soon (<b>~{minutes_left}m</b> left).")
