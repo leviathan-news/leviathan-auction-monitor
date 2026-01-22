@@ -127,7 +127,7 @@ async def on_auction_settled(event: ContractLog) -> None:
 
 @bot.cron("0 * * * *")  # Top of every hour
 async def notify_ending_soon(_: datetime) -> None:
-    await notify_group_chat(f"🟢 🐙 STILL ALIVE")
+    await notify_group_chat(f"🟢 🐙 STILL ALIVE", chat_id=ERROR_GROUP_CHAT_ID)
 
     now_s = int(datetime.now(tz=timezone.utc).timestamp())
 
