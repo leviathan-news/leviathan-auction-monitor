@@ -37,7 +37,7 @@ async def bot_startup(startup_state: StateSnapshot) -> None:
     #     await on_auction_created(log)
 
     # # TEST on_auction_bid
-    # logs = list(auction_house().AuctionBid.range(24147384, 24147386))
+    # logs = list(auction_house().AuctionBid.range(24292290, 24292292))
     # for log in logs:
     #     await on_auction_bid(log)
 
@@ -127,7 +127,7 @@ async def on_auction_settled(event: ContractLog) -> None:
 
 @bot.cron("0 * * * *")  # Top of every hour
 async def notify_ending_soon(_: datetime) -> None:
-    # await notify_group_chat(f"🟢 🐙 STILL ALIVE")
+    await notify_group_chat(f"🟢 🐙 STILL ALIVE")
 
     now_s = int(datetime.now(tz=timezone.utc).timestamp())
 
