@@ -16,7 +16,7 @@ blocking the Silverback async event loop.
 # Ensure logging is configured before any other bot.* imports
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 from ape.types import ContractLog
 from silverback import SilverbackBot, StateSnapshot
@@ -103,8 +103,16 @@ async def on_auction_created(event: ContractLog) -> None:
     auction_id = event.auction_id
     end_time_str = datetime.fromtimestamp(event.end_time, tz=timezone.utc).strftime("%Y-%m-%d %H:%M:%S %Z")
 
-    # Fetch minimum bid from contract — synchronous RPC, run in thread
-    minimum_total_bid = await asyncio.to_thread(lambda: int(auction_house().minimum_total_bid(auction_id)) / 1e18)
+    # Fetch minimum bid from contract — synchronous RPC, run in thread.
+    # Guarded so an RPC failure doesn't prevent the notification or DB tracking.
+    min_bid_str = "N/A"
+    try:
+        minimum_total_bid = await asyncio.to_thread(
+            lambda: int(auction_house().minimum_total_bid(auction_id)) / 1e18
+        )
+        min_bid_str = f"{minimum_total_bid:.4f} WETH"
+    except Exception as e:
+        logger.warning("RPC call for minimum_total_bid failed for auction %s: %s", auction_id, e)
 
     # Build the auction page link (empty string if AUCTION_UI_BASE_URL not set)
     ui_link = auction_ui_url(auction_id)
@@ -123,7 +131,7 @@ async def on_auction_created(event: ContractLog) -> None:
             f"{auction_description}\n\n"
             f"📌 <b>Auction ID:</b> {auction_id}\n"
             f"⏳ <b>End Time:</b> {end_time_str}\n"
-            f"💵 <b>Minimum Total Bid:</b> {minimum_total_bid:.4f} WETH"
+            f"💵 <b>Minimum Total Bid:</b> {min_bid_str}"
             f"{link_line}"
         )
 
@@ -140,13 +148,14 @@ async def on_auction_created(event: ContractLog) -> None:
             "🐙 A new auction has been created!\n\n"
             f"📌 <b>Auction ID:</b> {auction_id}\n"
             f"⏳ <b>End Time:</b> {end_time_str}\n"
-            f"💵 <b>Minimum Total Bid:</b> {minimum_total_bid:.4f} WETH"
+            f"💵 <b>Minimum Total Bid:</b> {min_bid_str}"
             f"{link_line}"
         )
 
-    # Track auction end time in SQLite for the ending-soon cron
+    # Always track auction end time in SQLite — even if notification failed,
+    # the ending-soon cron still needs to know about this auction.
     await add_auction(auction_id, int(event.end_time))
-    logger.info("AuctionCreated: id=%s end_time=%s min_bid=%.4f", auction_id, end_time_str, minimum_total_bid)
+    logger.info("AuctionCreated: id=%s end_time=%s min_bid=%s", auction_id, end_time_str, min_bid_str)
 
 
 @bot.on_(auction_house().AuctionBid)
@@ -176,14 +185,23 @@ async def on_auction_extended(event: ContractLog) -> None:
     against the current UTC timestamp.
     """
     auction_id = event.auction_id
+    # Calculate remaining time using direct integer division — avoids the
+    # timedelta.seconds truncation bug (which wraps at 24 hours).
     seconds_remaining = int(event.end_time) - int(datetime.now(tz=timezone.utc).timestamp())
-    minutes_added = int(timedelta(seconds=seconds_remaining).seconds / 60)
+    minutes_remaining = max(seconds_remaining // 60, 0)
 
     ui_link = auction_ui_url(auction_id)
     link_line = f'\n🔗 <a href="{ui_link}">View Auction</a>' if ui_link else ""
 
-    await notify_group_chat(f"🕰️ <b>Auction {auction_id}</b> has been extended by <b>~{minutes_added}m</b>.{link_line}")
-    logger.info("AuctionExtended: id=%s +%dm", auction_id, minutes_added)
+    await notify_group_chat(
+        f"🕰️ <b>Auction {auction_id}</b> has been extended (<b>~{minutes_remaining}m</b> remaining).{link_line}"
+    )
+
+    # Update the auction's end_time in SQLite so the ending-soon cron uses the
+    # new deadline. add_auction() upserts and resets notified_ending_soon to 0,
+    # making the auction eligible for a fresh ending-soon alert.
+    await add_auction(auction_id, int(event.end_time))
+    logger.info("AuctionExtended: id=%s ~%dm remaining", auction_id, minutes_remaining)
 
 
 @bot.on_(auction_house().AuctionSettled)
