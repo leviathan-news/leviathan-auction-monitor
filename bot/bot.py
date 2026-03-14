@@ -50,7 +50,7 @@ async def worker_startup(state: StateSnapshot) -> None:
 
 
 @bot.on_worker_shutdown()
-async def worker_shutdown() -> None:
+async def worker_shutdown(state: StateSnapshot) -> None:
     """Close database connection and HTTP session for this worker."""
     await close_session()
     await close_db()
