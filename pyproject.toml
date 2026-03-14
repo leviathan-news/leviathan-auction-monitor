@@ -12,6 +12,10 @@ dependencies = [
     "eth-ape==0.8.36",
     "silverback==0.7.27",
     "ape-etherscan==0.8.4",
+    "aiohttp>=3.9",
+    "aiosqlite>=0.19",
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
 ]
 
 [tool.ruff]
@@ -35,6 +39,9 @@ check_untyped_defs = true
 disallow_untyped_defs = true
 warn_unused_ignores = true
 disable_error_code = ["misc"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [build-system]
 requires = ["setuptools", "wheel"]
